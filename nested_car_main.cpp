@@ -76,20 +76,20 @@ int main() {
 
     try {
         XmlEngine engine;
-        CarHandler handler;
-
+    
+        CarHandler handler{
+            [](Car&& car) {
+                print_car(car);
+                std::cout << '\n';
+            }
+        };
+    
         engine.parse_memory(xml, handler);
-
-        std::cout << "Parsed cars: " << handler.cars().size() << "\n\n";
-
-        for (const auto& car : handler.cars()) {
-            print_car(car);
-            std::cout << '\n';
-        }
+    
     } catch (const std::exception& e) {
         std::cerr << "Parse failed: " << e.what() << '\n';
         return 1;
     }
-
+    
     return 0;
 }
