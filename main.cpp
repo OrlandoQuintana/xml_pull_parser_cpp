@@ -10,7 +10,7 @@
 int main() {
     const std::string xml = R"(
 <collection>
-    <record>
+    <record source="feed-a">
         <id>A-1001</id>
         <name>Alpha</name>
         <age>27</age>
@@ -20,21 +20,19 @@ int main() {
         <active>true</active>
         <valid>1</valid>
         <category>engineering</category>
-        <source>feed-a</source>
         <description>First flat demo record</description>
         <timestamp>2026-06-02T12:00:00Z</timestamp>
     </record>
 
-    <record>
+    <record source="feed-b">
         <id>B-2002</id>
         <name>Beta</name>
         <score>88.75</score>
         <active>false</active>
         <category>science</category>
-        <source>feed-b</source>
     </record>
 
-    <record>
+    <record source="feed-c">
         <id>C-3003</id>
         <name>Gamma</name>
         <count>44</count>
@@ -43,7 +41,7 @@ int main() {
         <description>Sparse optional fields</description>
     </record>
 
-    <record>
+    <record source="feed-d">
         <id>D-4004</id>
         <score>12.5</score>
         <active>true</active>
