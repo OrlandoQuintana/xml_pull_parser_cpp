@@ -5,12 +5,12 @@
 #include <libxml/parser.h>
 #include <libxml/xmlreader.h>
 
+#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
-#include <limits>
 
 class XmlEngine {
 public:
@@ -107,6 +107,7 @@ private:
                     path.emplace_back(name);
 
                     handler.on_start_element(name, path);
+                    emit_attributes(reader, handler, path);
 
                     if (xmlTextReaderIsEmptyElement(reader)) {
                         handler.on_end_element(name, path);
@@ -120,6 +121,7 @@ private:
                 case XML_READER_TYPE_CDATA:
                 case XML_READER_TYPE_SIGNIFICANT_WHITESPACE: {
                     const auto text = current_value(reader);
+
                     if (!text.empty()) {
                         handler.on_text(text, path);
                     }
@@ -143,6 +145,35 @@ private:
                     break;
             }
         }
+    }
+
+    template <typename Handler>
+    static void emit_attributes(
+        xmlTextReaderPtr reader,
+        Handler& handler,
+        const std::vector<std::string>& path
+    ) {
+        if (!xmlTextReaderHasAttributes(reader)) {
+            return;
+        }
+
+        const int first_attribute = xmlTextReaderMoveToFirstAttribute(reader);
+
+        if (first_attribute != 1) {
+            xmlTextReaderMoveToElement(reader);
+            return;
+        }
+
+        do {
+            const auto name = current_name(reader);
+            const auto value = current_value(reader);
+
+            if (!name.empty()) {
+                handler.on_attribute(name, value, path);
+            }
+        } while (xmlTextReaderMoveToNextAttribute(reader) == 1);
+
+        xmlTextReaderMoveToElement(reader);
     }
 
     static std::string_view current_name(xmlTextReaderPtr reader) {
