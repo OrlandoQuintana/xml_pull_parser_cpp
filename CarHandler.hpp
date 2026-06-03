@@ -1,4 +1,4 @@
-// CarHandler.hpp
+w// CarHandler.hpp
 
 #pragma once
 
@@ -156,77 +156,125 @@ inline PathTag classify_exterior_attribute(std::string_view name) {
 }
 
 class CarHandler {
+
 public:
+
+    using CarSink = std::function<void(Car&&)>;
+
+    explicit CarHandler(CarSink on_car)
+
+        : on_car_(std::move(on_car)) {}
+
     void on_start_element(std::string_view name, const std::vector<std::string>& path) {
+
         if (path.size() == 2 && path[0] == "cars" && name == "car") {
+
             inside_car_ = true;
+
             current_ = Car{};
+
             return;
+
         }
 
         if (!inside_car_) return;
 
         if (path.size() == 4 &&
+
             path[0] == "cars" &&
+
             path[1] == "car" &&
+
             path[2] == "engines" &&
+
             name == "engine") {
+
             current_.engines.emplace_back();
+
             return;
+
         }
 
         if (path.size() == 4 &&
+
             path[0] == "cars" &&
+
             path[1] == "car" &&
+
             path[2] == "interiors" &&
+
             name == "interior") {
+
             current_.interiors.emplace_back();
+
             return;
+
         }
 
         if (path.size() == 4 &&
+
             path[0] == "cars" &&
+
             path[1] == "car" &&
+
             path[2] == "exteriors" &&
+
             name == "exterior") {
+
             current_.exteriors.emplace_back();
+
             return;
+
         }
+
     }
 
     void on_attribute(
+
         std::string_view name,
+
         std::string_view value,
+
         const std::vector<std::string>& path
+
     ) {
+
         if (!inside_car_) return;
 
         const auto trimmed = xmlparse::trim_view(value);
+
         if (trimmed.empty()) return;
 
         insert_attribute(current_, path, name, trimmed);
+
     }
 
     void on_text(std::string_view text, const std::vector<std::string>& path) {
+
         if (!inside_car_) return;
 
         const auto trimmed = xmlparse::trim_view(text);
+
         if (trimmed.empty()) return;
 
         insert_text(current_, path, trimmed);
+
     }
 
     void on_end_element(std::string_view name, const std::vector<std::string>& path) {
+
         if (path.size() == 2 && path[0] == "cars" && name == "car") {
-            cars_.push_back(std::move(current_));
+
+            on_car_(std::move(current_));
+
             current_ = Car{};
+
             inside_car_ = false;
+
         }
+
     }
 
-    const std::vector<Car>& cars() const {
-        return cars_;
-    }
 
 private:
     static bool is_car_path(const std::vector<std::string>& path) {
@@ -366,7 +414,7 @@ private:
         // Unknown path or attribute. Ignore, count, or log depending on policy.
     }
 
-    std::vector<Car> cars_;
+    std::function<void(Car&&)> on_car_;
     Car current_;
     bool inside_car_ = false;
 };
