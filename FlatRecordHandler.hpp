@@ -1,7 +1,7 @@
 #pragma once
 
-#include <charconv>
-#include <cctype>
+#include "Parse.hpp"
+
 #include <iostream>
 #include <optional>
 #include <string>
@@ -55,106 +55,10 @@ using PathTag = std::variant<
     UnknownPath
 >;
 
-inline std::string_view trim_view(std::string_view s) {
-    while (!s.empty() && std::isspace(static_cast<unsigned char>(s.front()))) {
-        s.remove_prefix(1);
-    }
-
-    while (!s.empty() && std::isspace(static_cast<unsigned char>(s.back()))) {
-        s.remove_suffix(1);
-    }
-
-    return s;
-}
-
-inline std::string trim_copy(std::string_view s) {
-    const auto trimmed = trim_view(s);
-    return std::string{trimmed};
-}
-
-inline bool iequals_ascii(std::string_view a, std::string_view b) {
-    if (a.size() != b.size()) return false;
-
-    for (std::size_t i = 0; i < a.size(); ++i) {
-        const auto ca = static_cast<unsigned char>(a[i]);
-        const auto cb = static_cast<unsigned char>(b[i]);
-
-        if (std::tolower(ca) != std::tolower(cb)) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-inline std::optional<int> parse_int(std::string_view s) {
-    s = trim_view(s);
-
-    int value{};
-    const char* begin = s.data();
-    const char* end = s.data() + s.size();
-
-    auto [ptr, ec] = std::from_chars(begin, end, value);
-
-    if (ec == std::errc{} && ptr == end) {
-        return value;
-    }
-
-    return std::nullopt;
-}
-
-inline std::optional<float> parse_float(std::string_view s) {
-    s = trim_view(s);
-
-#if defined(__cpp_lib_to_chars) && __cpp_lib_to_chars >= 201611L
-    float value{};
-    const char* begin = s.data();
-    const char* end = s.data() + s.size();
-
-    auto [ptr, ec] = std::from_chars(begin, end, value);
-
-    if (ec == std::errc{} && ptr == end) {
-        return value;
-    }
-
-    return std::nullopt;
-#else
-    try {
-        return std::stof(std::string{s});
-    } catch (...) {
-        return std::nullopt;
-    }
-#endif
-}
-
-inline std::optional<bool> parse_bool(std::string_view s) {
-    s = trim_view(s);
-
-    if (s == "1" || iequals_ascii(s, "true")) return true;
-    if (s == "0" || iequals_ascii(s, "false")) return false;
-
-    return std::nullopt;
-}
-
 inline PathTag classify_path(const std::vector<std::string>& path) {
-    // Expected shape after root:
-    // collection.record.field
-    //
-    // path[0] = collection
-    // path[1] = record
-    // path[2] = field
-
-    if (path.size() != 3) {
-        return UnknownPath{};
-    }
-
-    if (path[0] != "collection") {
-        return UnknownPath{};
-    }
-
-    if (path[1] != "record") {
-        return UnknownPath{};
-    }
+    if (path.size() != 3) return UnknownPath{};
+    if (path[0] != "collection") return UnknownPath{};
+    if (path[1] != "record") return UnknownPath{};
 
     const std::string_view field = path[2];
 
@@ -186,7 +90,7 @@ public:
     void on_text(std::string_view text, const std::vector<std::string>& path) {
         if (!inside_record_) return;
 
-        const auto trimmed = trim_view(text);
+        const auto trimmed = xmlparse::trim_view(text);
         if (trimmed.empty()) return;
 
         insert_text(current_, path, trimmed);
@@ -234,51 +138,51 @@ private:
     }
 
     static void insert_text(FlatRecord& record, RequiredId, std::string_view text) {
-        record.id = std::string{text};
+        record.id = xmlparse::parse_string(text);
     }
 
     static void insert_text(FlatRecord& record, RequiredName, std::string_view text) {
-        record.name = std::string{text};
+        record.name = xmlparse::parse_string(text);
     }
 
     static void insert_text(FlatRecord& record, Age, std::string_view text) {
-        record.age = parse_int(text);
+        record.age = xmlparse::parse_int(text);
     }
 
     static void insert_text(FlatRecord& record, Count, std::string_view text) {
-        record.count = parse_int(text);
+        record.count = xmlparse::parse_int(text);
     }
 
     static void insert_text(FlatRecord& record, Score, std::string_view text) {
-        record.score = parse_float(text);
+        record.score = xmlparse::parse_float(text);
     }
 
     static void insert_text(FlatRecord& record, Temperature, std::string_view text) {
-        record.temperature = parse_float(text);
+        record.temperature = xmlparse::parse_float(text);
     }
 
     static void insert_text(FlatRecord& record, Active, std::string_view text) {
-        record.active = parse_bool(text);
+        record.active = xmlparse::parse_bool(text);
     }
 
     static void insert_text(FlatRecord& record, Valid, std::string_view text) {
-        record.valid = parse_bool(text);
+        record.valid = xmlparse::parse_bool(text);
     }
 
     static void insert_text(FlatRecord& record, Category, std::string_view text) {
-        record.category = std::string{text};
+        record.category = xmlparse::parse_string(text);
     }
 
     static void insert_text(FlatRecord& record, Source, std::string_view text) {
-        record.source = std::string{text};
+        record.source = xmlparse::parse_string(text);
     }
 
     static void insert_text(FlatRecord& record, Description, std::string_view text) {
-        record.description = std::string{text};
+        record.description = xmlparse::parse_string(text);
     }
 
     static void insert_text(FlatRecord& record, Timestamp, std::string_view text) {
-        record.timestamp = std::string{text};
+        record.timestamp = xmlparse::parse_string(text);
     }
 
     static void insert_text(FlatRecord&, UnknownPath, std::string_view) {
