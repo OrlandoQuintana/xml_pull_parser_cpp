@@ -2,13 +2,13 @@
 
 A reusable XML to struct parsing framework built on top of libxml2's streaming `xmlTextReader` API.
 
-The goal of the project is to separate XML tokenization from schema-specific parsing logic. The core engine is responsible for reading XML, maintaining parser state, and building element paths. Individual handlers are responsible for interpreting those paths and populating strongly typed C++ structs.
+The goal of the project is to separate XML tokenization from schema-specific parsing logic. The core engine is responsible for reading XML, maintaining parser state, building element paths, exposing attributes, and dispatching XML events. Individual handlers are responsible for interpreting those events and populating strongly typed C++ structs.
 
 The framework is designed to support both simple flat XML schemas and deeply nested heterogeneous schemas without modifying the core parsing engine.
 
 ## Architecture
 
-The project is composed of three primary layers:
+The project is composed of three primary layers.
 
 ### XmlEngine
 
@@ -20,6 +20,7 @@ Responsibilities:
 - Read XML from memory or files
 - Process XML events
 - Maintain the current XML path
+- Expose XML attributes
 - Dispatch parser events to handlers
 
 The engine has no knowledge of the target schema or output structures.
@@ -29,6 +30,7 @@ Example event flow:
 ```text
 XML
 -> Start Element
+-> Attribute
 -> Text
 -> End Element
 ```
@@ -37,6 +39,7 @@ For each event, the engine invokes handler callbacks:
 
 ```cpp
 handler.on_start_element(...)
+handler.on_attribute(...)
 handler.on_text(...)
 handler.on_end_element(...)
 ```
@@ -49,11 +52,12 @@ Supported conversions include:
 
 ```cpp
 xmlparse::parse_string(...)
+xmlparse::parse_bool(...)
 xmlparse::parse_int(...)
+xmlparse::parse_i64(...)
 xmlparse::parse_u64(...)
 xmlparse::parse_float(...)
 xmlparse::parse_double(...)
-xmlparse::parse_bool(...)
 ```
 
 These functions return `std::optional<T>` where appropriate and centralize all native type conversion logic.
@@ -66,6 +70,7 @@ Responsibilities:
 
 - Define output structs
 - Define path classifications
+- Define attribute classifications
 - Manage parser state
 - Create nested child objects
 - Populate fields
@@ -77,7 +82,7 @@ The engine remains unchanged regardless of the XML schema being processed.
 
 The parser follows a path-based state machine model.
 
-As XML elements are entered and exited, the engine maintains the current path:
+As XML elements are entered and exited, the engine maintains the current path.
 
 ```xml
 <cars>
@@ -102,7 +107,7 @@ Handlers classify paths and route values to the appropriate destination fields.
 
 Example:
 
-```cpp
+```text
 cars.car.engine.horsepower
 ```
 
@@ -124,13 +129,45 @@ and ultimately populates:
 current_.engines.back().horsepower
 ```
 
+## Attribute Support
+
+Attributes are exposed separately from element text.
+
+Example:
+
+```xml
+<engine horsepower="450">
+```
+
+Produces:
+
+```text
+Path:
+cars.car.engines.engine
+
+Attribute:
+horsepower = 450
+```
+
+The engine invokes:
+
+```cpp
+handler.on_attribute(
+    "horsepower",
+    "450",
+    path
+);
+```
+
+Handlers may classify and populate attributes using the same approach used for element text.
+
 ## Flat Schema Example
 
 A flat XML document may contain records such as:
 
 ```xml
 <collection>
-    <record>
+    <record source="feed-a">
         <id>A-1001</id>
         <name>Alpha</name>
         <score>98.5</score>
@@ -141,6 +178,7 @@ A flat XML document may contain records such as:
 The corresponding handler:
 
 - Creates a new record on `<record>`
+- Processes attributes
 - Populates fields as text nodes are encountered
 - Finalizes the record on `</record>`
 
@@ -152,8 +190,8 @@ A nested XML document may contain structures such as:
 <cars>
     <car>
         <engines>
-            <engine>
-                <horsepower>450</horsepower>
+            <engine horsepower="450">
+                <mpg>22</mpg>
             </engine>
         </engines>
     </car>
@@ -164,6 +202,7 @@ The handler:
 
 - Creates a `Car` object when entering `<car>`
 - Creates an `Engine` object when entering `<engine>`
+- Processes engine attributes
 - Populates the current engine while inside that context
 - Finalizes the car when leaving `</car>`
 
@@ -176,6 +215,7 @@ The core engine does not change between flat and nested schemas.
 - Strongly typed output structures
 - Separation of parser and schema logic
 - Reusable parsing engine
+- Support for XML attributes
 - Support for deeply nested XML documents
 - Support for heterogeneous XML schemas
 - Easy creation of new schema handlers
@@ -188,33 +228,31 @@ Path classification is implemented manually through schema-specific code.
 
 Validation rules are implemented within individual handlers.
 
-XML attributes are not currently mapped into structs.
-
 Namespace-aware path matching has not yet been implemented.
 
 ## Future Work: XML Namespaces
 
-The current implementation builds paths using:
+The current implementation uses:
 
 ```cpp
 xmlTextReaderConstLocalName()
 ```
 
-For an element such as:
+For XML such as:
 
 ```xml
 <car:engine xmlns:car="urn:cars">
 ```
 
-the path currently contains:
+the parser currently sees:
 
 ```text
 engine
 ```
 
-The namespace prefix and namespace URI are not currently stored in the path representation.
+This means the parser will often work correctly with namespaced XML as long as element names remain unique. However, namespace information is not currently preserved, so elements with the same local name but different namespaces cannot be distinguished.
 
-If namespace-aware matching becomes necessary, the path representation can be updated from:
+To support namespaces, the path representation can be changed from:
 
 ```cpp
 std::vector<std::string>
@@ -240,13 +278,15 @@ xmlTextReaderConstPrefix(reader);
 xmlTextReaderConstNamespaceUri(reader);
 ```
 
-Handlers can then classify paths using both the local name and namespace URI when required.
+Handlers can then classify paths using both local names and namespace URIs when required.
 
 Example:
 
 ```cpp
-path[2].local == "engine" &&
-path[2].uri == "urn:cars"
+path[3].local == "engine" &&
+path[3].uri == "urn:cars"
 ```
 
-This change only affects the path representation and path classification logic. The overall architecture remains unchanged.
+The same approach should be applied to attributes so that namespaced attributes can also be distinguished correctly.
+
+This change only affects path and attribute classification. The overall architecture, event model, parser state machine, and handler design remain unchanged.
