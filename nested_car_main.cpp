@@ -1,0 +1,96 @@
+#include "XmlEngine.hpp"
+#include "CarHandler.hpp"
+
+#include <exception>
+#include <iostream>
+#include <string>
+
+int main() {
+    const std::string xml = R"(
+<cars>
+    <car>
+        <color>red</color>
+        <top_speed>185</top_speed>
+        <price>72000.50</price>
+
+        <engines>
+            <engine>
+                <horsepower>450</horsepower>
+                <mpg>22</mpg>
+                <engine_price>18000.25</engine_price>
+            </engine>
+            <engine>
+                <horsepower>520</horsepower>
+                <mpg>18</mpg>
+                <engine_price>25000.75</engine_price>
+            </engine>
+        </engines>
+
+        <interiors>
+            <interior>
+                <interior_color>black</interior_color>
+                <seat_material>leather</seat_material>
+                <heated_seats>true</heated_seats>
+            </interior>
+            <interior>
+                <interior_color>tan</interior_color>
+                <seat_material>alcantara</seat_material>
+                <heated_seats>false</heated_seats>
+            </interior>
+        </interiors>
+
+        <exteriors>
+            <exterior>
+                <paint_id>10001</paint_id>
+                <insured>true</insured>
+            </exterior>
+            <exterior>
+                <paint_id>10002</paint_id>
+                <insured>false</insured>
+            </exterior>
+        </exteriors>
+    </car>
+
+    <car>
+        <color>blue</color>
+        <top_speed>155</top_speed>
+        <price>41000.00</price>
+
+        <engines>
+            <engine>
+                <horsepower>300</horsepower>
+                <mpg>31</mpg>
+                <engine_price>9000.00</engine_price>
+            </engine>
+        </engines>
+
+        <interiors>
+            <interior>
+                <interior_color>gray</interior_color>
+                <seat_material>cloth</seat_material>
+                <heated_seats>true</heated_seats>
+            </interior>
+        </interiors>
+    </car>
+</cars>
+)";
+
+    try {
+        XmlEngine engine;
+        CarHandler handler;
+
+        engine.parse_memory(xml, handler);
+
+        std::cout << "Parsed cars: " << handler.cars().size() << "\n\n";
+
+        for (const auto& car : handler.cars()) {
+            print_car(car);
+            std::cout << '\n';
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "Parse failed: " << e.what() << '\n';
+        return 1;
+    }
+
+    return 0;
+}
