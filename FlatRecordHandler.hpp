@@ -80,6 +80,23 @@ inline PathTag classify_path(const std::vector<std::string>& path) {
     return UnknownPath{};
 }
 
+inline PathTag classify_record_attribute(std::string_view name) {
+    if (name == "id") return RequiredId{};
+    if (name == "name") return RequiredName{};
+    if (name == "age") return Age{};
+    if (name == "count") return Count{};
+    if (name == "score") return Score{};
+    if (name == "temperature") return Temperature{};
+    if (name == "active") return Active{};
+    if (name == "valid") return Valid{};
+    if (name == "category") return Category{};
+    if (name == "source") return Source{};
+    if (name == "description") return Description{};
+    if (name == "timestamp") return Timestamp{};
+
+    return UnknownPath{};
+}
+
 class FlatRecordHandler {
 public:
     void on_start_element(std::string_view name, const std::vector<std::string>& path) {
@@ -87,6 +104,19 @@ public:
             inside_record_ = true;
             current_ = FlatRecord{};
         }
+    }
+
+    void on_attribute(
+        std::string_view name,
+        std::string_view value,
+        const std::vector<std::string>& path
+    ) {
+        if (!inside_record_) return;
+
+        const auto trimmed = xmlparse::trim_view(value);
+        if (trimmed.empty()) return;
+
+        insert_attribute(current_, path, name, trimmed);
     }
 
     void on_text(std::string_view text, const std::vector<std::string>& path) {
@@ -124,71 +154,96 @@ private:
         return !record.id.empty() && !record.name.empty();
     }
 
+    static bool is_record_path(const std::vector<std::string>& path) {
+        return path.size() == 2 &&
+               path[0] == "collection" &&
+               path[1] == "record";
+    }
+
     static void insert_text(
         FlatRecord& record,
         const std::vector<std::string>& path,
         std::string_view text
     ) {
-        PathTag tag = classify_path(path);
+        const PathTag tag = classify_path(path);
+        insert_by_tag(record, tag, text);
+    }
 
+    static void insert_attribute(
+        FlatRecord& record,
+        const std::vector<std::string>& path,
+        std::string_view name,
+        std::string_view value
+    ) {
+        if (!is_record_path(path)) return;
+
+        const PathTag tag = classify_record_attribute(name);
+        insert_by_tag(record, tag, value);
+    }
+
+    static void insert_by_tag(
+        FlatRecord& record,
+        const PathTag& tag,
+        std::string_view text
+    ) {
         std::visit(
             [&](auto concrete_tag) {
-                insert_text(record, concrete_tag, text);
+                insert_value(record, concrete_tag, text);
             },
             tag
         );
     }
 
-    static void insert_text(FlatRecord& record, RequiredId, std::string_view text) {
+    static void insert_value(FlatRecord& record, RequiredId, std::string_view text) {
         record.id = xmlparse::parse_string(text);
     }
 
-    static void insert_text(FlatRecord& record, RequiredName, std::string_view text) {
+    static void insert_value(FlatRecord& record, RequiredName, std::string_view text) {
         record.name = xmlparse::parse_string(text);
     }
 
-    static void insert_text(FlatRecord& record, Age, std::string_view text) {
+    static void insert_value(FlatRecord& record, Age, std::string_view text) {
         record.age = xmlparse::parse_int(text);
     }
 
-    static void insert_text(FlatRecord& record, Count, std::string_view text) {
+    static void insert_value(FlatRecord& record, Count, std::string_view text) {
         record.count = xmlparse::parse_int(text);
     }
 
-    static void insert_text(FlatRecord& record, Score, std::string_view text) {
+    static void insert_value(FlatRecord& record, Score, std::string_view text) {
         record.score = xmlparse::parse_float(text);
     }
 
-    static void insert_text(FlatRecord& record, Temperature, std::string_view text) {
+    static void insert_value(FlatRecord& record, Temperature, std::string_view text) {
         record.temperature = xmlparse::parse_float(text);
     }
 
-    static void insert_text(FlatRecord& record, Active, std::string_view text) {
+    static void insert_value(FlatRecord& record, Active, std::string_view text) {
         record.active = xmlparse::parse_bool(text);
     }
 
-    static void insert_text(FlatRecord& record, Valid, std::string_view text) {
+    static void insert_value(FlatRecord& record, Valid, std::string_view text) {
         record.valid = xmlparse::parse_bool(text);
     }
 
-    static void insert_text(FlatRecord& record, Category, std::string_view text) {
+    static void insert_value(FlatRecord& record, Category, std::string_view text) {
         record.category = xmlparse::parse_string(text);
     }
 
-    static void insert_text(FlatRecord& record, Source, std::string_view text) {
+    static void insert_value(FlatRecord& record, Source, std::string_view text) {
         record.source = xmlparse::parse_string(text);
     }
 
-    static void insert_text(FlatRecord& record, Description, std::string_view text) {
+    static void insert_value(FlatRecord& record, Description, std::string_view text) {
         record.description = xmlparse::parse_string(text);
     }
 
-    static void insert_text(FlatRecord& record, Timestamp, std::string_view text) {
+    static void insert_value(FlatRecord& record, Timestamp, std::string_view text) {
         record.timestamp = xmlparse::parse_string(text);
     }
 
-    static void insert_text(FlatRecord&, UnknownPath, std::string_view) {
-        // Unknown path. Ignore, count, or log depending on policy.
+    static void insert_value(FlatRecord&, UnknownPath, std::string_view) {
+        // Unknown path or attribute. Ignore, count, or log depending on policy.
     }
 
     std::vector<FlatRecord> records_;
