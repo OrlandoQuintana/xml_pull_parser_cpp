@@ -16,13 +16,11 @@ int main() {
         <price>72000.50</price>
 
         <engines>
-            <engine>
-                <horsepower>450</horsepower>
+            <engine horsepower="450">
                 <mpg>22</mpg>
                 <engine_price>18000.25</engine_price>
             </engine>
-            <engine>
-                <horsepower>520</horsepower>
+            <engine horsepower="520">
                 <mpg>18</mpg>
                 <engine_price>25000.75</engine_price>
             </engine>
@@ -59,8 +57,7 @@ int main() {
         <price>41000.00</price>
 
         <engines>
-            <engine>
-                <horsepower>300</horsepower>
+            <engine horsepower="300">
                 <mpg>31</mpg>
                 <engine_price>9000.00</engine_price>
             </engine>
