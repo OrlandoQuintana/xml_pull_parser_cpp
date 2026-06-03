@@ -1,74 +1,252 @@
-# xml_pull_parser_cpp
+# XML Struct Parser
 
-XML Namespace Handling Note
+A reusable XML to struct parsing framework built on top of libxml2's streaming `xmlTextReader` API.
 
-The current XML engine builds paths using only the local element name via xmlTextReaderConstLocalName. This means an element such as:
+The goal of the project is to separate XML tokenization from schema-specific parsing logic. The core engine is responsible for reading XML, maintaining parser state, and building element paths. Individual handlers are responsible for interpreting those paths and populating strongly typed C++ structs.
 
+The framework is designed to support both simple flat XML schemas and deeply nested heterogeneous schemas without modifying the core parsing engine.
+
+## Architecture
+
+The project is composed of three primary layers:
+
+### XmlEngine
+
+`XmlEngine` is the reusable streaming parser.
+
+Responsibilities:
+
+- Initialize and manage libxml2 resources
+- Read XML from memory or files
+- Process XML events
+- Maintain the current XML path
+- Dispatch parser events to handlers
+
+The engine has no knowledge of the target schema or output structures.
+
+Example event flow:
+
+```text
+XML
+-> Start Element
+-> Text
+-> End Element
+```
+
+For each event, the engine invokes handler callbacks:
+
+```cpp
+handler.on_start_element(...)
+handler.on_text(...)
+handler.on_end_element(...)
+```
+
+### Parse
+
+`Parse.hpp` contains reusable parsing utilities for converting XML text into native C++ types.
+
+Supported conversions include:
+
+```cpp
+xmlparse::parse_string(...)
+xmlparse::parse_int(...)
+xmlparse::parse_u64(...)
+xmlparse::parse_float(...)
+xmlparse::parse_double(...)
+xmlparse::parse_bool(...)
+```
+
+These functions return `std::optional<T>` where appropriate and centralize all native type conversion logic.
+
+### Handlers
+
+Handlers contain all schema-specific behavior.
+
+Responsibilities:
+
+- Define output structs
+- Define path classifications
+- Manage parser state
+- Create nested child objects
+- Populate fields
+- Validate records
+
+The engine remains unchanged regardless of the XML schema being processed.
+
+## Parsing Model
+
+The parser follows a path-based state machine model.
+
+As XML elements are entered and exited, the engine maintains the current path:
+
+```xml
+<cars>
+    <car>
+        <engine>
+            <horsepower>450</horsepower>
+        </engine>
+    </car>
+</cars>
+```
+
+Produces:
+
+```text
+cars
+cars.car
+cars.car.engine
+cars.car.engine.horsepower
+```
+
+Handlers classify paths and route values to the appropriate destination fields.
+
+Example:
+
+```cpp
+cars.car.engine.horsepower
+```
+
+becomes:
+
+```cpp
+EngineHorsepower{}
+```
+
+which is dispatched through variant visitation:
+
+```cpp
+std::visit(...)
+```
+
+and ultimately populates:
+
+```cpp
+current_.engines.back().horsepower
+```
+
+## Flat Schema Example
+
+A flat XML document may contain records such as:
+
+```xml
+<collection>
+    <record>
+        <id>A-1001</id>
+        <name>Alpha</name>
+        <score>98.5</score>
+    </record>
+</collection>
+```
+
+The corresponding handler:
+
+- Creates a new record on `<record>`
+- Populates fields as text nodes are encountered
+- Finalizes the record on `</record>`
+
+## Nested Schema Example
+
+A nested XML document may contain structures such as:
+
+```xml
+<cars>
+    <car>
+        <engines>
+            <engine>
+                <horsepower>450</horsepower>
+            </engine>
+        </engines>
+    </car>
+</cars>
+```
+
+The handler:
+
+- Creates a `Car` object when entering `<car>`
+- Creates an `Engine` object when entering `<engine>`
+- Populates the current engine while inside that context
+- Finalizes the car when leaving `</car>`
+
+The core engine does not change between flat and nested schemas.
+
+## Design Goals
+
+- Streaming XML parsing
+- Low memory usage
+- Strongly typed output structures
+- Separation of parser and schema logic
+- Reusable parsing engine
+- Support for deeply nested XML documents
+- Support for heterogeneous XML schemas
+- Easy creation of new schema handlers
+
+## Current Limitations
+
+The framework currently requires a handler implementation for each schema.
+
+Path classification is implemented manually through schema-specific code.
+
+Validation rules are implemented within individual handlers.
+
+XML attributes are not currently mapped into structs.
+
+Namespace-aware path matching has not yet been implemented.
+
+## Future Work: XML Namespaces
+
+The current implementation builds paths using:
+
+```cpp
+xmlTextReaderConstLocalName()
+```
+
+For an element such as:
+
+```xml
 <car:engine xmlns:car="urn:cars">
+```
 
-is currently represented in the path as:
+the path currently contains:
 
+```text
 engine
+```
 
-The namespace prefix and namespace URI are not lost by libxml2, but the current engine is not capturing them.
+The namespace prefix and namespace URI are not currently stored in the path representation.
 
-This is acceptable for early prototyping if the candidate XML schemas do not contain name collisions or if namespace identity is not needed for field classification. However, for production XML sources that use namespaces, the engine should become namespace-aware.
+If namespace-aware matching becomes necessary, the path representation can be updated from:
 
-The recommended refactor is to replace the path type:
+```cpp
+std::vector<std::string>
+```
 
-std::vector<std::string> path;
+to:
 
-with a namespace-aware path type:
-
+```cpp
 struct XmlName {
-    std::string local;   // e.g. "engine"
-    std::string prefix;  // e.g. "car"
-    std::string uri;     // e.g. "urn:cars"
+    std::string local;
+    std::string prefix;
+    std::string uri;
 };
+
 using XmlPath = std::vector<XmlName>;
+```
 
-XmlEngine should populate each XmlName using libxml2 reader APIs:
+The engine can populate these fields using:
 
+```cpp
 xmlTextReaderConstLocalName(reader);
 xmlTextReaderConstPrefix(reader);
 xmlTextReaderConstNamespaceUri(reader);
+```
 
-Handlers can then choose their matching policy.
+Handlers can then classify paths using both the local name and namespace URI when required.
 
-For schemas where namespaces do not matter:
+Example:
 
-path[2].local == "engine"
-
-For schemas where namespaces are semantically important:
-
+```cpp
 path[2].local == "engine" &&
 path[2].uri == "urn:cars"
+```
 
-Path matching should generally prefer namespace URI over prefix. Prefixes are aliases and may change between XML documents:
-
-<a:engine xmlns:a="urn:cars">
-<b:engine xmlns:b="urn:cars">
-
-Both elements belong to the same namespace because the URI is the same. The prefix is only a document-local shorthand.
-
-This change does not alter the core architecture. The existing model still holds:
-
-libxml2 event stream
--> path builder
--> schema-specific handler
--> path classification
--> variant visitation
--> typed struct mutation
-
-The only change is that the path builder stores richer names. Existing handlers can initially continue matching only on local, while namespace-sensitive handlers can match on local + uri.
-
-Recommended implementation path:
-
-1. Introduce XmlName and XmlPath.
-2. Update XmlEngine to push XmlName instead of std::string.
-3. Provide small helper functions such as local(path, i) and uri(path, i) to keep handlers readable.
-4. Update handlers one at a time.
-5. Add tests showing that different prefixes with the same URI classify identically.
-6. Add tests showing that the same local name in different namespaces can classify differently.
-
-This keeps namespace support as an incremental refactor rather than a redesign.
+This change only affects the path representation and path classification logic. The overall architecture remains unchanged.
