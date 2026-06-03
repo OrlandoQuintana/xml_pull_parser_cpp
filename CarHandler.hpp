@@ -124,6 +124,37 @@ inline PathTag classify_path(const std::vector<std::string>& path) {
     return UnknownPath{};
 }
 
+inline PathTag classify_car_attribute(std::string_view name) {
+    if (name == "color") return CarColor{};
+    if (name == "top_speed") return CarTopSpeed{};
+    if (name == "price") return CarPrice{};
+
+    return UnknownPath{};
+}
+
+inline PathTag classify_engine_attribute(std::string_view name) {
+    if (name == "horsepower") return EngineHorsepower{};
+    if (name == "mpg") return EngineMpg{};
+    if (name == "engine_price") return EnginePrice{};
+
+    return UnknownPath{};
+}
+
+inline PathTag classify_interior_attribute(std::string_view name) {
+    if (name == "interior_color") return InteriorColor{};
+    if (name == "seat_material") return SeatMaterial{};
+    if (name == "heated_seats") return HeatedSeats{};
+
+    return UnknownPath{};
+}
+
+inline PathTag classify_exterior_attribute(std::string_view name) {
+    if (name == "paint_id") return PaintId{};
+    if (name == "insured") return Insured{};
+
+    return UnknownPath{};
+}
+
 class CarHandler {
 public:
     void on_start_element(std::string_view name, const std::vector<std::string>& path) {
@@ -163,6 +194,19 @@ public:
         }
     }
 
+    void on_attribute(
+        std::string_view name,
+        std::string_view value,
+        const std::vector<std::string>& path
+    ) {
+        if (!inside_car_) return;
+
+        const auto trimmed = xmlparse::trim_view(value);
+        if (trimmed.empty()) return;
+
+        insert_attribute(current_, path, name, trimmed);
+    }
+
     void on_text(std::string_view text, const std::vector<std::string>& path) {
         if (!inside_car_) return;
 
@@ -185,79 +229,141 @@ public:
     }
 
 private:
-    static void insert_text(Car& car, const std::vector<std::string>& path, std::string_view text) {
-        PathTag tag = classify_path(path);
+    static bool is_car_path(const std::vector<std::string>& path) {
+        return path.size() == 2 &&
+               path[0] == "cars" &&
+               path[1] == "car";
+    }
 
+    static bool is_engine_path(const std::vector<std::string>& path) {
+        return path.size() == 4 &&
+               path[0] == "cars" &&
+               path[1] == "car" &&
+               path[2] == "engines" &&
+               path[3] == "engine";
+    }
+
+    static bool is_interior_path(const std::vector<std::string>& path) {
+        return path.size() == 4 &&
+               path[0] == "cars" &&
+               path[1] == "car" &&
+               path[2] == "interiors" &&
+               path[3] == "interior";
+    }
+
+    static bool is_exterior_path(const std::vector<std::string>& path) {
+        return path.size() == 4 &&
+               path[0] == "cars" &&
+               path[1] == "car" &&
+               path[2] == "exteriors" &&
+               path[3] == "exterior";
+    }
+
+    static void insert_text(
+        Car& car,
+        const std::vector<std::string>& path,
+        std::string_view text
+    ) {
+        const PathTag tag = classify_path(path);
+        insert_by_tag(car, tag, text);
+    }
+
+    static void insert_attribute(
+        Car& car,
+        const std::vector<std::string>& path,
+        std::string_view name,
+        std::string_view value
+    ) {
+        PathTag tag = UnknownPath{};
+
+        if (is_car_path(path)) {
+            tag = classify_car_attribute(name);
+        } else if (is_engine_path(path)) {
+            tag = classify_engine_attribute(name);
+        } else if (is_interior_path(path)) {
+            tag = classify_interior_attribute(name);
+        } else if (is_exterior_path(path)) {
+            tag = classify_exterior_attribute(name);
+        }
+
+        insert_by_tag(car, tag, value);
+    }
+
+    static void insert_by_tag(
+        Car& car,
+        const PathTag& tag,
+        std::string_view text
+    ) {
         std::visit(
             [&](auto concrete_tag) {
-                insert_text(car, concrete_tag, text);
+                insert_value(car, concrete_tag, text);
             },
             tag
         );
     }
 
-    static void insert_text(Car& car, CarColor, std::string_view text) {
+    static void insert_value(Car& car, CarColor, std::string_view text) {
         car.color = xmlparse::parse_string(text);
     }
 
-    static void insert_text(Car& car, CarTopSpeed, std::string_view text) {
+    static void insert_value(Car& car, CarTopSpeed, std::string_view text) {
         car.top_speed = xmlparse::parse_u64(text);
     }
 
-    static void insert_text(Car& car, CarPrice, std::string_view text) {
+    static void insert_value(Car& car, CarPrice, std::string_view text) {
         car.price = xmlparse::parse_double(text);
     }
 
-    static void insert_text(Car& car, EngineHorsepower, std::string_view text) {
+    static void insert_value(Car& car, EngineHorsepower, std::string_view text) {
         if (!car.engines.empty()) {
             car.engines.back().horsepower = xmlparse::parse_u64(text);
         }
     }
 
-    static void insert_text(Car& car, EngineMpg, std::string_view text) {
+    static void insert_value(Car& car, EngineMpg, std::string_view text) {
         if (!car.engines.empty()) {
             car.engines.back().mpg = xmlparse::parse_u64(text);
         }
     }
 
-    static void insert_text(Car& car, EnginePrice, std::string_view text) {
+    static void insert_value(Car& car, EnginePrice, std::string_view text) {
         if (!car.engines.empty()) {
             car.engines.back().engine_price = xmlparse::parse_double(text);
         }
     }
 
-    static void insert_text(Car& car, InteriorColor, std::string_view text) {
+    static void insert_value(Car& car, InteriorColor, std::string_view text) {
         if (!car.interiors.empty()) {
             car.interiors.back().interior_color = xmlparse::parse_string(text);
         }
     }
 
-    static void insert_text(Car& car, SeatMaterial, std::string_view text) {
+    static void insert_value(Car& car, SeatMaterial, std::string_view text) {
         if (!car.interiors.empty()) {
             car.interiors.back().seat_material = xmlparse::parse_string(text);
         }
     }
 
-    static void insert_text(Car& car, HeatedSeats, std::string_view text) {
+    static void insert_value(Car& car, HeatedSeats, std::string_view text) {
         if (!car.interiors.empty()) {
             car.interiors.back().heated_seats = xmlparse::parse_bool(text);
         }
     }
 
-    static void insert_text(Car& car, PaintId, std::string_view text) {
+    static void insert_value(Car& car, PaintId, std::string_view text) {
         if (!car.exteriors.empty()) {
             car.exteriors.back().paint_id = xmlparse::parse_u64(text);
         }
     }
 
-    static void insert_text(Car& car, Insured, std::string_view text) {
+    static void insert_value(Car& car, Insured, std::string_view text) {
         if (!car.exteriors.empty()) {
             car.exteriors.back().insured = xmlparse::parse_bool(text);
         }
     }
 
-    static void insert_text(Car&, UnknownPath, std::string_view) {
-        // Unknown path. Ignore, count, or log depending on policy.
+    static void insert_value(Car&, UnknownPath, std::string_view) {
+        // Unknown path or attribute. Ignore, count, or log depending on policy.
     }
 
     std::vector<Car> cars_;
