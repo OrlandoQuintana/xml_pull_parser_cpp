@@ -4,6 +4,7 @@
 
 #include <charconv>
 #include <cctype>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -23,7 +24,9 @@ inline std::string_view trim_view(std::string_view s) {
 }
 
 inline bool iequals_ascii(std::string_view a, std::string_view b) {
-    if (a.size() != b.size()) return false;
+    if (a.size() != b.size()) {
+        return false;
+    }
 
     for (std::size_t i = 0; i < a.size(); ++i) {
         const auto ca = static_cast<unsigned char>(a[i]);
@@ -58,7 +61,23 @@ inline std::optional<int> parse_int(std::string_view s) {
     return parse_integer<int>(s);
 }
 
-inline std::optional<unsigned long long> parse_u64(std::string_view s) {
+inline std::optional<std::int32_t> parse_i32(std::string_view s) {
+    return parse_integer<std::int32_t>(s);
+}
+
+inline std::optional<std::int64_t> parse_i64(std::string_view s) {
+    return parse_integer<std::int64_t>(s);
+}
+
+inline std::optional<std::uint32_t> parse_u32(std::string_view s) {
+    return parse_integer<std::uint32_t>(s);
+}
+
+inline std::optional<std::uint64_t> parse_u64(std::string_view s) {
+    return parse_integer<std::uint64_t>(s);
+}
+
+inline std::optional<unsigned long long> parse_ull(std::string_view s) {
     return parse_integer<unsigned long long>(s);
 }
 
@@ -97,8 +116,13 @@ inline std::optional<float> parse_float(std::string_view s) {
 inline std::optional<bool> parse_bool(std::string_view s) {
     s = trim_view(s);
 
-    if (s == "1" || iequals_ascii(s, "true")) return true;
-    if (s == "0" || iequals_ascii(s, "false")) return false;
+    if (s == "1" || iequals_ascii(s, "true")) {
+        return true;
+    }
+
+    if (s == "0" || iequals_ascii(s, "false")) {
+        return false;
+    }
 
     return std::nullopt;
 }
@@ -107,4 +131,4 @@ inline std::string parse_string(std::string_view s) {
     return std::string{trim_view(s)};
 }
 
-}
+} // namespace xmlparse
