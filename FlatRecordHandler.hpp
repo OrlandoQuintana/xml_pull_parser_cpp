@@ -4,10 +4,12 @@
 
 #include "Parse.hpp"
 
+#include <functional>
 #include <iostream>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -99,6 +101,11 @@ inline PathTag classify_record_attribute(std::string_view name) {
 
 class FlatRecordHandler {
 public:
+    using RecordSink = std::function<void(FlatRecord&&)>;
+
+    explicit FlatRecordHandler(RecordSink on_record)
+        : on_record_(std::move(on_record)) {}
+
     void on_start_element(std::string_view name, const std::vector<std::string>& path) {
         if (path.size() == 2 && path[0] == "collection" && name == "record") {
             inside_record_ = true;
@@ -131,7 +138,7 @@ public:
     void on_end_element(std::string_view name, const std::vector<std::string>& path) {
         if (path.size() == 2 && path[0] == "collection" && name == "record") {
             if (is_valid(current_)) {
-                records_.push_back(std::move(current_));
+                on_record_(std::move(current_));
             } else {
                 ++invalid_records_;
             }
@@ -139,10 +146,6 @@ public:
             current_ = FlatRecord{};
             inside_record_ = false;
         }
-    }
-
-    const std::vector<FlatRecord>& records() const {
-        return records_;
     }
 
     std::size_t invalid_records() const {
@@ -246,7 +249,7 @@ private:
         // Unknown path or attribute. Ignore, count, or log depending on policy.
     }
 
-    std::vector<FlatRecord> records_;
+    RecordSink on_record_;
     FlatRecord current_;
     bool inside_record_ = false;
     std::size_t invalid_records_ = 0;
