@@ -1,6 +1,7 @@
 #pragma once
 
 #include <charconv>
+#include <cctype>
 #include <iostream>
 #include <optional>
 #include <string>
@@ -9,8 +10,8 @@
 #include <vector>
 
 struct FlatRecord {
-    std::string id;    // required
-    std::string name;  // required
+    std::string id;
+    std::string name;
 
     std::optional<int> age;
     std::optional<int> count;
@@ -54,84 +55,129 @@ using PathTag = std::variant<
     UnknownPath
 >;
 
-inline std::string trim_copy(std::string_view s) {
-    const auto begin = s.find_first_not_of(" \n\r\t");
-    if (begin == std::string_view::npos) return {};
+inline std::string_view trim_view(std::string_view s) {
+    while (!s.empty() && std::isspace(static_cast<unsigned char>(s.front()))) {
+        s.remove_prefix(1);
+    }
 
-    const auto end = s.find_last_not_of(" \n\r\t");
-    return std::string{s.substr(begin, end - begin + 1)};
+    while (!s.empty() && std::isspace(static_cast<unsigned char>(s.back()))) {
+        s.remove_suffix(1);
+    }
+
+    return s;
+}
+
+inline std::string trim_copy(std::string_view s) {
+    const auto trimmed = trim_view(s);
+    return std::string{trimmed};
+}
+
+inline bool iequals_ascii(std::string_view a, std::string_view b) {
+    if (a.size() != b.size()) return false;
+
+    for (std::size_t i = 0; i < a.size(); ++i) {
+        const auto ca = static_cast<unsigned char>(a[i]);
+        const auto cb = static_cast<unsigned char>(b[i]);
+
+        if (std::tolower(ca) != std::tolower(cb)) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 inline std::optional<int> parse_int(std::string_view s) {
-    const auto trimmed = trim_copy(s);
+    s = trim_view(s);
 
     int value{};
-    const char* begin = trimmed.data();
-    const char* end = trimmed.data() + trimmed.size();
+    const char* begin = s.data();
+    const char* end = s.data() + s.size();
 
     auto [ptr, ec] = std::from_chars(begin, end, value);
-    if (ec == std::errc{} && ptr == end) return value;
+
+    if (ec == std::errc{} && ptr == end) {
+        return value;
+    }
 
     return std::nullopt;
 }
 
 inline std::optional<float> parse_float(std::string_view s) {
+    s = trim_view(s);
+
+#if defined(__cpp_lib_to_chars) && __cpp_lib_to_chars >= 201611L
+    float value{};
+    const char* begin = s.data();
+    const char* end = s.data() + s.size();
+
+    auto [ptr, ec] = std::from_chars(begin, end, value);
+
+    if (ec == std::errc{} && ptr == end) {
+        return value;
+    }
+
+    return std::nullopt;
+#else
     try {
-        return std::stof(trim_copy(s));
+        return std::stof(std::string{s});
     } catch (...) {
         return std::nullopt;
     }
+#endif
 }
 
 inline std::optional<bool> parse_bool(std::string_view s) {
-    const auto trimmed = trim_copy(s);
+    s = trim_view(s);
 
-    if (trimmed == "true" || trimmed == "TRUE" || trimmed == "1") return true;
-    if (trimmed == "false" || trimmed == "FALSE" || trimmed == "0") return false;
+    if (s == "1" || iequals_ascii(s, "true")) return true;
+    if (s == "0" || iequals_ascii(s, "false")) return false;
 
     return std::nullopt;
 }
 
-inline std::string join_path_without_root(
-    const std::vector<std::string>& path,
-    std::string_view root
-) {
-    std::string joined;
+inline PathTag classify_path(const std::vector<std::string>& path) {
+    // Expected shape after root:
+    // collection.record.field
+    //
+    // path[0] = collection
+    // path[1] = record
+    // path[2] = field
 
-    std::size_t start = 0;
-    if (!path.empty() && path.front() == root) {
-        start = 1;
+    if (path.size() != 3) {
+        return UnknownPath{};
     }
 
-    for (std::size_t i = start; i < path.size(); ++i) {
-        if (!joined.empty()) joined += ".";
-        joined += path[i];
+    if (path[0] != "collection") {
+        return UnknownPath{};
     }
 
-    return joined;
-}
+    if (path[1] != "record") {
+        return UnknownPath{};
+    }
 
-inline PathTag classify_path(std::string_view path) {
-    if (path == "record.id") return RequiredId{};
-    if (path == "record.name") return RequiredName{};
-    if (path == "record.age") return Age{};
-    if (path == "record.count") return Count{};
-    if (path == "record.score") return Score{};
-    if (path == "record.temperature") return Temperature{};
-    if (path == "record.active") return Active{};
-    if (path == "record.valid") return Valid{};
-    if (path == "record.category") return Category{};
-    if (path == "record.source") return Source{};
-    if (path == "record.description") return Description{};
-    if (path == "record.timestamp") return Timestamp{};
+    const std::string_view field = path[2];
+
+    if (field == "id") return RequiredId{};
+    if (field == "name") return RequiredName{};
+    if (field == "age") return Age{};
+    if (field == "count") return Count{};
+    if (field == "score") return Score{};
+    if (field == "temperature") return Temperature{};
+    if (field == "active") return Active{};
+    if (field == "valid") return Valid{};
+    if (field == "category") return Category{};
+    if (field == "source") return Source{};
+    if (field == "description") return Description{};
+    if (field == "timestamp") return Timestamp{};
 
     return UnknownPath{};
 }
 
 class FlatRecordHandler {
 public:
-    void on_start_element(std::string_view name, const std::vector<std::string>&) {
-        if (name == "record") {
+    void on_start_element(std::string_view name, const std::vector<std::string>& path) {
+        if (path.size() == 2 && path[0] == "collection" && name == "record") {
             inside_record_ = true;
             current_ = FlatRecord{};
         }
@@ -140,12 +186,14 @@ public:
     void on_text(std::string_view text, const std::vector<std::string>& path) {
         if (!inside_record_) return;
 
-        const auto joined = join_path_without_root(path, "collection");
-        insert_text(current_, joined, text);
+        const auto trimmed = trim_view(text);
+        if (trimmed.empty()) return;
+
+        insert_text(current_, path, trimmed);
     }
 
-    void on_end_element(std::string_view name, const std::vector<std::string>&) {
-        if (name == "record") {
+    void on_end_element(std::string_view name, const std::vector<std::string>& path) {
+        if (path.size() == 2 && path[0] == "collection" && name == "record") {
             if (is_valid(current_)) {
                 records_.push_back(std::move(current_));
             } else {
@@ -170,7 +218,11 @@ private:
         return !record.id.empty() && !record.name.empty();
     }
 
-    static void insert_text(FlatRecord& record, std::string_view path, std::string_view text) {
+    static void insert_text(
+        FlatRecord& record,
+        const std::vector<std::string>& path,
+        std::string_view text
+    ) {
         PathTag tag = classify_path(path);
 
         std::visit(
@@ -182,11 +234,11 @@ private:
     }
 
     static void insert_text(FlatRecord& record, RequiredId, std::string_view text) {
-        record.id = trim_copy(text);
+        record.id = std::string{text};
     }
 
     static void insert_text(FlatRecord& record, RequiredName, std::string_view text) {
-        record.name = trim_copy(text);
+        record.name = std::string{text};
     }
 
     static void insert_text(FlatRecord& record, Age, std::string_view text) {
@@ -214,23 +266,23 @@ private:
     }
 
     static void insert_text(FlatRecord& record, Category, std::string_view text) {
-        record.category = trim_copy(text);
+        record.category = std::string{text};
     }
 
     static void insert_text(FlatRecord& record, Source, std::string_view text) {
-        record.source = trim_copy(text);
+        record.source = std::string{text};
     }
 
     static void insert_text(FlatRecord& record, Description, std::string_view text) {
-        record.description = trim_copy(text);
+        record.description = std::string{text};
     }
 
     static void insert_text(FlatRecord& record, Timestamp, std::string_view text) {
-        record.timestamp = trim_copy(text);
+        record.timestamp = std::string{text};
     }
 
     static void insert_text(FlatRecord&, UnknownPath, std::string_view) {
-        // Ignore unknown path.
+        // Unknown path. Ignore, count, or log depending on policy.
     }
 
     std::vector<FlatRecord> records_;
@@ -248,8 +300,8 @@ inline void print_record(const FlatRecord& record) {
     if (record.count) std::cout << "  count: " << *record.count << '\n';
     if (record.score) std::cout << "  score: " << *record.score << '\n';
     if (record.temperature) std::cout << "  temperature: " << *record.temperature << '\n';
-    if (record.active) std::cout << "  active: " << *record.active << '\n';
-    if (record.valid) std::cout << "  valid: " << *record.valid << '\n';
+    if (record.active) std::cout << "  active: " << std::boolalpha << *record.active << '\n';
+    if (record.valid) std::cout << "  valid: " << std::boolalpha << *record.valid << '\n';
     if (record.category) std::cout << "  category: " << *record.category << '\n';
     if (record.source) std::cout << "  source: " << *record.source << '\n';
     if (record.description) std::cout << "  description: " << *record.description << '\n';
