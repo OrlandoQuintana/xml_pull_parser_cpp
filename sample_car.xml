@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<v:cars xmlns:v="urn:demo:vehicles">
+    <v:car color="red" top_speed="185" price="72000.50">
+        <v:engines>
+            <v:engine horsepower="450">
+                <v:mpg>22</v:mpg>
+                <v:engine_price>18000.25</v:engine_price>
+            </v:engine>
+            <v:engine horsepower="520" mpg="18" engine_price="25000.75" />
+            <v:engine>
+                <v:horsepower>610</v:horsepower>
+                <v:mpg>16</v:mpg>
+                <v:engine_price>31000.00</v:engine_price>
+            </v:engine>
+        </v:engines>
+    </v:car>
+
+    <v:car>
+        <v:color>blue</v:color>
+        <v:top_speed>155</v:top_speed>
+        <v:price>41000.00</v:price>
+
+        <v:interiors>
+            <v:interior interior_color="gray" seat_material="cloth" heated_seats="true" />
+            <v:interior>
+                <v:interior_color>black</v:interior_color>
+                <v:seat_material>leather</v:seat_material>
+                <v:heated_seats>true</v:heated_seats>
+            </v:interior>
+            <v:interior>
+                <v:interior_color>tan</v:interior_color>
+                <v:seat_material>alcantara</v:seat_material>
+                <v:heated_seats>false</v:heated_seats>
+            </v:interior>
+        </v:interiors>
+    </v:car>
+
+    <v:car color="white">
+        <v:exteriors>
+            <v:exterior paint_id="10001" insured="true" />
+            <v:exterior>
+                <v:paint_id>10002</v:paint_id>
+                <v:insured>false</v:insured>
+            </v:exterior>
+            <v:exterior paint_id="10003">
+                <v:insured>true</v:insured>
+            </v:exterior>
+        </v:exteriors>
+    </v:car>
+
+    <v:car>
+        <v:color>black</v:color>
+        <v:engines>
+            <v:engine horsepower="300">
+                <v:mpg>31</v:mpg>
+            </v:engine>
+        </v:engines>
+        <v:interiors>
+            <v:interior seat_material="synthetic">
+                <v:interior_color>brown</v:interior_color>
+                <v:heated_seats>false</v:heated_seats>
+            </v:interior>
+        </v:interiors>
+        <v:exteriors>
+            <v:exterior>
+                <v:paint_id>20001</v:paint_id>
+                <v:insured>true</v:insured>
+            </v:exterior>
+        </v:exteriors>
+    </v:car>
+
+    <v:car price="36500.99">
+        <v:top_speed>130</v:top_speed>
+
+        <v:interiors>
+            <v:interior interior_color="green" />
+            <v:interior seat_material="vegan leather" heated_seats="true" />
+        </v:interiors>
+
+        <v:exteriors>
+            <v:exterior insured="false">
+                <v:paint_id>30001</v:paint_id>
+            </v:exterior>
+        </v:exteriors>
+    </v:car>
+</v:cars>
